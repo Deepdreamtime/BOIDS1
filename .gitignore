@@ -1,160 +1,271 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
+import pygame
+import random
+import math
 
-# C extensions
-*.so
+# Parameters of the simulation
+WIDTH = 1200
+HEIGHT = 800
+NUM_BOIDS = 250
+MAX_NUM_BOIDS = 250 # New constant added here
+BG_COLOR = (0, 0, 0)
+BOID_COLOR = (255, 255, 255)
+BOID_SIZE = 5
+BOID_SPEED = 2
+MAX_BOID_SPEED = 50 # New constant added here
+SEPARATION_RADIUS = 1000
 
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
+# Parameters of the GUI
+PANEL_WIDTH = 300
+PANEL_COLOR = (50, 50, 50)
+SLIDER_COLOR = (100, 100, 100)
+SLIDER_WIDTH = PANEL_WIDTH - 40
+SLIDER_HEIGHT = 20
+SLIDER_PADDING = 30
+FONT_COLOR = (255, 255, 255)
+BUTTON_COLOR = (100, 100, 100)
+BUTTON_WIDTH = SLIDER_WIDTH
+BUTTON_HEIGHT = SLIDER_HEIGHT
+BUTTON_PADDING = SLIDER_PADDING
 
-# PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
-*.manifest
-*.spec
+class Boid:
+    def __init__(self):
+        self.position = pygame.Vector2(random.randrange(WIDTH), random.randrange(HEIGHT))
+        self.velocity = pygame.Vector2(BOID_SPEED, 0).rotate(random.uniform(0, 360))
 
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
+    def update(self, flock, separation_radius, alignment_radius, cohesion_radius, repulsion_radius, steering_force, bounce, speed_slider_value):
+        # Separation rule
+        separation_force = pygame.Vector2(0, 0)
+        for other in flock:
+            if other != self and self.position.distance_to(other.position) < separation_radius:
+                diff = self.position - other.position
+                distance = diff.length()
+                if distance > 0: # Avoid division by zero
+                    separation_force += diff.normalize() / distance
+        separation_force /= len(flock) - 1 if len(flock) > 1 else 1
 
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
-cover/
+        # Alignment rule
+        alignment_force = pygame.Vector2(0, 0)
+        for other in flock:
+            if other != self and self.position.distance_to(other.position) < alignment_radius:
+                alignment_force += other.velocity
+        alignment_force /= len(flock) - 1 if len(flock) > 1 else 1
 
-# Translations
-*.mo
-*.pot
+        # Check if alignment_force length is greater than zero before normalization
+        if alignment_force.length() > 0:
+            alignment_force.normalize_ip()
 
-# Django stuff:
-*.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
+        # Cohesion rule
+        cohesion_force = pygame.Vector2(0, 0)
+        for other in flock:
+            if other != self and self.position.distance_to(other.position) < cohesion_radius:
+                cohesion_force += other.position
+        cohesion_force /= len(flock) - 1 if len(flock) > 1 else 1
+        cohesion_force = (cohesion_force - self.position).normalize()
 
-# Flask stuff:
-instance/
-.webassets-cache
+        # Repulsion rule
+        repulsion_force = pygame.Vector2(0, 0)
+        for other in flock:
+            if other != self and self.position.distance_to(other.position) < repulsion_radius:
+                diff = self.position - other.position
+                distance = diff.length()
+                if distance > 0: # Avoid division by zero
+                    repulsion_force += diff.normalize() / distance
+        repulsion_force /= len(flock) -1 if len(flock) >1 else 1
 
-# Scrapy stuff:
-.scrapy
+        # Steering force
+        desired_velocity = separation_force + alignment_force + cohesion_force + repulsion_force 
+        steering_force *= (desired_velocity - self.velocity)
 
-# Sphinx documentation
-docs/_build/
+        # Update the velocity and position by combining the forces.
+        self.velocity += steering_force 
+        self.velocity.normalize_ip()
+        
+        # Correctly update the position based on the value of the speed slider 
+        self.position += self.velocity * (BOID_SPEED + speed_slider_value * (MAX_BOID_SPEED - BOID_SPEED))
 
-# PyBuilder
-.pybuilder/
-target/
+        # Handle bouncing off the screen boundaries 
+        if bounce:
+            if self.position.x < BOID_SIZE or self.position.x > WIDTH-BOID_SIZE:
+                self.velocity.x *= -1 
+            if self.position.y < BOID_SIZE or self.position.y > HEIGHT-BOID_SIZE:
+                self.velocity.y *= -1 
 
-# Jupyter Notebook
-.ipynb_checkpoints
+    def draw(self, screen):
+        pygame.draw.circle(screen, BOID_COLOR, (int(self.position.x), int(self.position.y)), BOID_SIZE)
 
-# IPython
-profile_default/
-ipython_config.py
 
-# pyenv
-#   For a library or package, you might want to ignore these files since the code is
-#   intended to run in multiple environments; otherwise, check them in:
-# .python-version
 
-# pipenv
-#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
-#   However, in case of collaboration, if having platform-specific dependencies or dependencies
-#   having no cross-platform support, pipenv may install dependencies that don't work, or not
-#   install all needed dependencies.
-#Pipfile.lock
 
-# poetry
-#   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
-#   This is especially recommended for binary packages to ensure reproducibility, and is more
-#   commonly ignored for libraries.
-#   https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
-#poetry.lock
+class Slider:
+    def __init__(self,x,y,width,height,label):
+      self.rect=pygame.Rect(x,y,width,height)
+      self.value=0.5
+      self.label=label
 
-# pdm
-#   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
-#pdm.lock
-#   pdm stores project-wide configurations in .pdm.toml, but it is recommended to not include it
-#   in version control.
-#   https://pdm.fming.dev/#use-with-ide
-.pdm.toml
+    def handle_event(self,event):
+      if event.type == pygame.MOUSEBUTTONDOWN:
+          if event.button ==1:
+              if self.rect.collidepoint(event.pos):
+                  self.value= (event.pos[0]-self.rect.x)/self.rect.width
 
-# PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
-__pypackages__/
+      elif event.type == pygame.MOUSEMOTION:
+          if event.buttons[0] ==1:
+              if self.rect.collidepoint(event.pos):
+                  self.value= (event.pos[0]-self.rect.x)/self.rect.width
 
-# Celery stuff
-celerybeat-schedule
-celerybeat.pid
+    def draw(self, screen):
+      font=pygame.font.Font(None,int(SLIDER_HEIGHT*1.5))
+      label=font.render(self.label,True,FONT_COLOR)
+      screen.blit(label,(self.rect.x,self.rect.y-SLIDER_HEIGHT))
+      pygame.draw.rect(screen,
+                       SLIDER_COLOR,
+                       (self.rect.x,
+                        self.rect.y,
+                        int(self.value * SLIDER_WIDTH),
+                        SLIDER_HEIGHT))
+      
+      # Change the way the value label is created and displayed for the "Speed" and "Number of Boids" sliders
+      if self.label in ["Speed", "Number of Boids"]:
+          value_label = font.render(f"{int(self.value * 100)}%", True, FONT_COLOR)
+      else:
+          value_label = font.render(f"{self.value:.2f}", True, FONT_COLOR)
+      
+      screen.blit(value_label, (self.rect.x + SLIDER_WIDTH - value_label.get_width(),
+                                self.rect.y + SLIDER_HEIGHT))
 
-# SageMath parsed files
-*.sage.py
 
-# Environments
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
+class Button:
+    def __init__(self,x,y,width,height,label):
+        self.rect = pygame.Rect(x,y,width,height)
+        self.label = label
+        self.pressed = False
 
-# Spyder project settings
-.spyderproject
-.spyproject
+    def handle_event(self,event):
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            if event.button == 1:
+                if self.rect.collidepoint(event.pos):
+                    self.pressed = not self.pressed
 
-# Rope project settings
-.ropeproject
+    def draw(self,screen):
+        color = (200,200,200) if self.pressed else BUTTON_COLOR
+        pygame.draw.rect(screen,color,self.rect)
+        font = pygame.font.Font(None,int(BUTTON_HEIGHT*1.5))
+        label = font.render(self.label,True,FONT_COLOR)
+        screen.blit(label,(self.rect.centerx - label.get_width()/2,
+                           self.rect.centery - label.get_height()/2))
 
-# mkdocs documentation
-/site
 
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
+def main():
+    pygame.init()
+    screen = pygame.display.set_mode((WIDTH + PANEL_WIDTH , HEIGHT))
+    pygame.display.set_caption("Boids Simulation")
 
-# Pyre type checker
-.pyre/
+    clock = pygame.time.Clock()
 
-# pytype static type analyzer
-.pytype/
+    flock = [Boid() for _ in range(NUM_BOIDS)]
 
-# Cython debug symbols
-cython_debug/
+    separation_knob = SEPARATION_RADIUS 
+    alignment_knob = 60000
+    cohesion_knob = 900000
+    repulsion_knob = SEPARATION_RADIUS/50000
+    steering_knob = 0.08
 
-# PyCharm
-#  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
-#  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
-#  and can be added to the global gitignore or merged into this file.  For a more nuclear
-#  option (not recommended) you can uncomment the following to ignore the entire idea folder.
-#.idea/
+    separation_slider = Slider(WIDTH + 20,
+                               SLIDER_HEIGHT + SLIDER_PADDING,
+                               SLIDER_WIDTH,
+                               SLIDER_HEIGHT,
+                               "Separation")
+    separation_slider.value = separation_knob / SEPARATION_RADIUS
+    alignment_slider = Slider(WIDTH + 20,
+                              2 * SLIDER_HEIGHT + 2 * SLIDER_PADDING,
+                              SLIDER_WIDTH,
+                              SLIDER_HEIGHT,
+                              "Alignment")
+    alignment_slider.value = alignment_knob / WIDTH
+    cohesion_slider = Slider(WIDTH + 20,
+                             3 * SLIDER_HEIGHT + 3 * SLIDER_PADDING,
+                             SLIDER_WIDTH,
+                             SLIDER_HEIGHT,
+                             "Cohesion")
+    cohesion_slider.value = cohesion_knob / WIDTH
+    repulsion_slider = Slider(WIDTH + 20,
+                              4 * SLIDER_HEIGHT + 4 * SLIDER_PADDING,
+                              SLIDER_WIDTH,
+                              SLIDER_HEIGHT,
+                              "Repulsion")
+    repulsion_slider.value = repulsion_knob / (SEPARATION_RADIUS/10)
+    steering_slider = Slider(WIDTH + 20,
+                             5 * SLIDER_HEIGHT + 5 * SLIDER_PADDING,
+                             SLIDER_WIDTH,
+                             SLIDER_HEIGHT,
+                             "Steering")
+    steering_slider.value = steering_knob / 0.5
+    
+    # New slider added here
+    speed_slider = Slider(WIDTH + 20,
+                          6 * SLIDER_HEIGHT + 6 * SLIDER_PADDING,
+                          SLIDER_WIDTH,
+                          SLIDER_HEIGHT,
+                          "Speed")
+    speed_slider.value = BOID_SPEED / MAX_BOID_SPEED
+
+    bounce_button = Button(WIDTH + 20,
+                           7 * BUTTON_HEIGHT + 7 * BUTTON_PADDING, # Updated y position
+                           BUTTON_WIDTH,
+                           BUTTON_HEIGHT,
+                           "Bounce")
+    
+    # Set the bounce button to be switched on at the start of the simulation
+    bounce_button.pressed = True
+    
+    # New slider added here
+    num_boids_slider = Slider(WIDTH + 20,
+                              8 * SLIDER_HEIGHT + 8 * SLIDER_PADDING,
+                              SLIDER_WIDTH,
+                              SLIDER_HEIGHT,
+                              "Number of Boids")
+    num_boids_slider.value = NUM_BOIDS / MAX_NUM_BOIDS
+
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                return
+            separation_slider.handle_event(event)
+            alignment_slider.handle_event(event)
+            cohesion_slider.handle_event(event)
+            repulsion_slider.handle_event(event)
+            steering_slider.handle_event(event)
+            speed_slider.handle_event(event) # New event handler added here
+            bounce_button.handle_event(event)
+            num_boids_slider.handle_event(event) # New event handler added here
+
+        screen.fill(BG_COLOR)
+
+        num_boids = int(num_boids_slider.value * MAX_NUM_BOIDS)
+        for boid in flock[:num_boids]:
+            boid.update(flock, separation_knob * separation_slider.value,
+                        alignment_knob * alignment_slider.value,
+                        cohesion_knob * cohesion_slider.value,
+                        repulsion_knob * repulsion_slider.value, 
+                        steering_knob * steering_slider.value, 
+                        bounce_button.pressed, speed_slider.value) # Added speed_slider.value as an argument here
+            boid.draw(screen)
+
+
+        # Draw the control panel
+        pygame.draw.rect(screen, PANEL_COLOR, (WIDTH, 0, PANEL_WIDTH, HEIGHT))
+        separation_slider.draw(screen)
+        alignment_slider.draw(screen)
+        cohesion_slider.draw(screen)
+        repulsion_slider.draw(screen)
+        speed_slider.draw(screen) # New slider drawn here
+        bounce_button.draw(screen)
+        num_boids_slider.draw(screen) # New slider drawn here
+
+        pygame.display.flip()
+        clock.tick(60)
+
+
+if __name__ == "__main__":
+    main()
